@@ -1,9 +1,9 @@
 import re
 import joblib
-from cuDL.layer import Layer
+from cuDL.layers import Layer
 
 from cuDL.loss import get_loss
-from cuDL.optimizer import get_optimizer
+from cuDL.optim import get_optimizer
 from cuDL.activations import get_activation
 from cuDL.metrics import get_metric
 import cuDL.metrics as metrics
@@ -13,23 +13,35 @@ import numpy as np
 from numpy.random import shuffle as np_shuffle
 from tqdm import tqdm
 
+from cuDL.utils import millify
+
+import warnings
+
+warnings.filterwarnings("ignore")
+
 
 class Model:
     def __init__(self, name="", layers=None, loss=None, optimizer=None):
 
         self.name = name
         self.layers = layers
-        if self.loss is not None:
+        if loss is not None:
             assert isinstance(
                 self.loss, str
             ), "Loss name passed to model init must be a string"
             self.loss = get_loss(self.loss)
+        else:
+            self.loss = None
 
-        if self.optimizer is not None:
+        if optimizer is not None:
             assert isinstance(
                 self.optimizer, str
             ), "Optimizer name passed to model init must be a string"
             self.optimizer = get_optimizer(self.optimizer)
+        else:
+            self.optimizer = None
+
+        self.metrics = None
 
     def add_layer(self, layer):
         if self.layers is None:
@@ -56,6 +68,9 @@ class Model:
                 "No layers specified, You should specify at least one layer during model init with model add_layer before compile"
             )
 
+        self.loss = loss
+        self.optimizer = optimizer
+
         if metrics is not None:
             self.metrics = []
             for metric in metrics:
@@ -81,18 +96,21 @@ class Model:
             ), "Optimizer name passed to model init must be a string"
             # TODO: feels loose, we might need nestrov, momentum and adam based params.
             # perhaps we can set good defaults in optimizers directly but need to find a cleaner way
-            self.optimizer = get_optimizer(self.optimizer)(learning_rate=learning_rate)
+            self.optimizer = get_optimizer(self.optimizer, learning_rate=learning_rate)
 
         return self
 
     def predict(self, X_test, y_test=None, print_classification_metrics=False):
         y_pred = self.forward(X_test)
+        num_classes = y_pred.shape[1]
         if y_test is not None:
             if print_classification_metrics:
                 # show this for 2 decimal places
-                print("Test Accuracy: ", round(self.compute_loss(y_test, y_pred), 2))
-                print(metrics.classification_report(y_test, y_pred))
-                print(metrics.confusion_matrix(y_test, y_pred))
+                print("Accuracy: {:.2f}".format(metrics.accuracy(y_test, y_pred)))
+                y_test = y_test.argmax(axis=1)
+                y_pred = y_pred.argmax(axis=1)
+                print(metrics._classification_report(y_test, y_pred))
+                print(metrics._confusion_matrix(y_test, y_pred))
 
     def fit(
         self,
@@ -150,28 +168,39 @@ class Model:
         print(f"Validation data labels shape: {y_val.shape}")
 
         if shuffle:
-            X_train, y_train = np_shuffle(X_train, y_train)
+            idxs = np.arange(X_train.shape[0])
+            np_shuffle(idxs)
+            X_train = X_train[idxs]
+            y_train = y_train[idxs]
 
         tk = tqdm(range(epochs))
         for epoch in tk:
             for i in range(0, X_train.shape[0], batch_size):
+                # # skip last batch if it is not full
+                # if i + batch_size > X_train.shape[0]:
+                #     break
                 X_batch = X_train[i : i + batch_size]
                 y_batch = y_train[i : i + batch_size]
                 y_pred = self.forward(X_batch)
-                loss = self.compute_loss(y_batch, y_pred)
-                grad = self.backward(y_pred - y_batch)
-                self.update(grad)
+                _loss = self.compute_loss(y_batch, y_pred)
 
-                self.mean_train_loss.append(loss)
+                self.mean_train_loss.append(_loss)
+
+                # backprop and update gradients
+                params, grads = self.backward(y_batch, y_pred)
+                self.update(params, grads)
 
             for i in range(0, X_val.shape[0], batch_size):
+                # # skip last batch if it is not full
+                # if i + batch_size > X_val.shape[0]:
+                #     break
                 X_batch = X_val[i : i + batch_size]
                 y_batch = y_val[i : i + batch_size]
                 y_pred = self.forward(X_batch)
-                loss = self.compute_loss(y_batch, y_pred)
-                self.mean_val_loss.append(loss)
+                _loss = self.compute_loss(y_batch, y_pred)
+                self.mean_val_loss.append(_loss)
 
-                if self.metrics is not None or self.metrics != []:
+                if self.metrics is not None and self.metrics != []:
                     for (metric_name, metric_func) in self.metrics:
                         self.mean_val_metrics[metric_name].append(
                             metric_func(y_batch, y_pred)
@@ -182,7 +211,8 @@ class Model:
                 "train_loss": round(np.mean(self.mean_train_loss), 2),
                 "val_loss": round(np.mean(self.mean_val_loss), 2),
             }
-            if self.metrics is not None or self.metrics != []:
+            # print(self.metrics)
+            if self.metrics is not None and self.metrics != []:
                 for (metric_name, _) in self.metrics:
                     printing_dict[metric_name] = round(
                         np.mean(self.mean_val_metrics[metric_name]), 2
@@ -198,27 +228,42 @@ class Model:
             output = layer.forward(output, *args, **kwargs)
         return output
 
-    def backward(self, _input, *args, **kwargs):
-        grad = _input
-        for layer in reversed(self.layers):
-            grad = layer.backward(grad, *args, **kwargs)
-        return grad
+    def backward(self, y_true, y_pred, *args, **kwargs):
+        next_grad = self.loss.backward(y_true, y_pred)
+        for layer in self.layers[::-1]:
+            next_grad = layer.backward(next_grad)
+
+        params = []
+        grads = []
+        for layer in self.layers:
+            params += layer.params
+            grads += layer.grads
+
+        return params, grads
 
     def compute_loss(self, y_true, y_pred):
         assert self.loss is not None, "No loss specified"
         return self.loss.forward(y_true, y_pred)
 
-    def update(self, *args, **kwargs):
+    def update(self, params, grads):
         assert self.optimizer is not None, "No optimizer specified"
-        self.optimizer.update(self, *args, **kwargs)
+        self.optimizer.update(params, grads)
 
-    def summary(self):
-        # TODO: implement summary for loss, layers, optimizer
-        print("Model:", self.name)
-        for layer in self.layers:
-            print(layer.summary())
-        print("Loss:", self.loss.summary())
-        print("Optimizer:", self.optimizer.summary())
+    def summary(self, batch_size=-1):
+        total_params = 0
+        # print a summary of the model like keras model_summary
+        print("Model Summary")
+        print("=" * 20)
+        print(f"Layers: {len(self.layers)}")
+        for idx, layer in enumerate(self.layers):
+            print(f"Layer {idx}: {layer.__class__.__name__}", end="\t")
+            print(f"Input shape: ({batch_size, layer.input_dim})", end="\t")
+            print(f"Output shape: ({batch_size, layer.output_dim})", end="\t")
+            print(f"Params: {layer.num_params}")
+            total_params += layer.num_params
+
+        print(f"Total params: {millify(total_params)}")
+        print("=" * 20)
 
     def save(self, path):
         joblib.dump(self, path)

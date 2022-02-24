@@ -20,7 +20,10 @@ def get_initializer(name):
 
 
 def random_init(*shape):
-    return np.random.rand(*shape)
+    weights = np.random.rand(*shape)
+    # normalize the weights
+    weights = weights / np.linalg.norm(weights)
+    return weights
 
 
 def zeros_init(*shape):
@@ -32,8 +35,13 @@ def ones_init(*shape):
 
 
 def xavier_init(*shape):
+
+    mu, sigma = 0, 0.1  # mean and standard deviation
     assert len(shape) == 2, "xavier_init only supports 2D tensors"
-    return np.random.randn(*shape) * np.sqrt(2.0 / (shape[0] + shape[1]))
+    in_dim, out_dim = shape[0], shape[1]
+    return np.random.normal(mu, sigma, (in_dim, out_dim)) * np.sqrt(
+        2.0 / (in_dim + out_dim)
+    )
 
 
 def he_init(*shape):

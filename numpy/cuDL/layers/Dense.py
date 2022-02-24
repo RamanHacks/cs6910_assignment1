@@ -8,7 +8,6 @@ class Dense(Layer):
     def __init__(
         self, input_dim, output_dim, activation="linear", init_method="xavier", name=""
     ):
-        super().__init__(name)
         # sanity check
         assert isinstance(input_dim, int), "input_dim must be of type int"
         assert isinstance(output_dim, int), "output_dim must be of type int"
@@ -18,10 +17,10 @@ class Dense(Layer):
 
         # generally its assumed that any layer is not the first layer and this is handled by the compile method
         self.is_first_layer = False
-
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.activation = get_activation(activation)
+        self.init_method = init_method
         self.name = name
 
         self.reset_params()
@@ -75,9 +74,7 @@ class Dense(Layer):
         assert pre_grad.shape[0] > 0, f"pre_grad must have at least one row"
 
         # compute gradients
-        d_activation = self.activation.backward(self._input)
-        d_activation *= pre_grad
-        d_activation = d_activation.sum(axis=0)
+        d_activation = pre_grad * self.activation.backward()
 
         self.d_weights = self._input.T.dot(d_activation)
         self.d_bias = d_activation.mean(axis=0)
@@ -93,7 +90,7 @@ class Dense(Layer):
 
     @property
     # return sum of parameters of the model
-    def calc_num_params(self):
+    def num_params(self):
         return self.weights.size + self.bias.size
 
     @property

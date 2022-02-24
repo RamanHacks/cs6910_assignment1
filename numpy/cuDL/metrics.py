@@ -39,6 +39,15 @@ def mae(y_true, y_pred):
 
 # classification metrics
 def accuracy(y_true, y_pred):
+    # print()
+    # print("y_true: ", y_true)
+    # print("y_pred: ", y_pred)
+    y_true = y_true.argmax(axis=1)
+    y_pred = y_pred.argmax(axis=1)
+    # print("After argmax")
+    # print("y_true: ", y_true)
+    # print("y_pred: ", y_pred)
+    # print()
     return np.mean(y_true == y_pred) * 100
 
 
@@ -59,9 +68,9 @@ def f1(y_true, y_pred):
     )
 
 
-def confusion_matrix(y_true, y_pred, labels=None):
+def _confusion_matrix(y_true, y_pred, labels=None):
     return confusion_matrix(y_true, y_pred, labels=labels)
 
 
-def classification_report(y_true, y_pred, labels=None):
+def _classification_report(y_true, y_pred, labels=None):
     return classification_report(y_true, y_pred, labels=labels)

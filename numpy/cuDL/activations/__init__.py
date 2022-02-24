@@ -8,6 +8,10 @@ def get_activation(name):
         return Sigmoid()
     elif name == "linear":
         return Linear()
+    elif name == "softmax":
+        return Softmax()
+    elif name == "relu":
+        return Relu()
     else:
         raise ValueError(f"Unknown activation: {name}")
 
@@ -28,13 +32,14 @@ class Activation(metaclass=abc.ABCMeta):
 
 class Linear(Activation):
     def forward(self, x):
+        self.output = x
         return x
 
-    def backward(self, x):
-        return np.ones_like(x)
+    def backward(self):
+        return np.ones_like(self.output)
 
     def __call__(self, x):
-        return x
+        return self.forward(x)
 
 
 class Sigmoid(Activation):
@@ -42,10 +47,41 @@ class Sigmoid(Activation):
         self.name = "sigmoid"
 
     def forward(self, x):
-        return 1 / (1 + np.exp(-x))
+        self.output = 1 / (1 + np.exp(-x))
+        return self.output
 
-    def backward(self, x):
-        return self.forward(x) * (1 - self.forward(x))
+    def backward(self):
+        return self.output * (1 - self.output)
+
+    def __call__(self, x):
+        return self.forward(x)
+
+
+class Softmax(Activation):
+    def __init__(self):
+        self.name = "softmax"
+
+    def forward(self, x):
+        self.output = x
+        return np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
+
+    def backward(self):
+        return np.ones(self.output.shape)
+
+    def __call__(self, x):
+        return self.forward(x)
+
+
+class Relu(Activation):
+    def __init__(self):
+        self.name = "relu"
+
+    def forward(self, x):
+        self.output = x
+        return np.maximum(x, 0)
+
+    def backward(self):
+        return np.where(self.output > 0, 1, 0)
 
     def __call__(self, x):
         return self.forward(x)
