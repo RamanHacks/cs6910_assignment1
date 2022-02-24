@@ -65,7 +65,7 @@ class Dense(Layer):
 
         return outputs
 
-    def backward(self, pre_grad, *args, **kwargs):
+    def backward(self, pre_grad, regularizer=None, *args, **kwargs):
         # sanity check
         assert isinstance(pre_grad, np.ndarray), "pre_grad must be of type np.ndarray"
         assert (
@@ -74,10 +74,22 @@ class Dense(Layer):
         assert pre_grad.shape[0] > 0, f"pre_grad must have at least one row"
 
         # compute gradients
-        d_activation = pre_grad * self.activation.backward()
+        d_activation = self.activation.backward()
+
+        # check if pred_grad and d_activation have dimesions
+        if pre_grad.ndim != d_activation.ndim:
+            # for softmax activation
+            d_activation = np.einsum("ijk,ik->ij", d_activation, pre_grad)
+        else:
+            d_activation = pre_grad * d_activation
 
         self.d_weights = self._input.T.dot(d_activation)
         self.d_bias = d_activation.mean(axis=0)
+
+        # regularization gradients
+        if regularizer is not None:
+            self.d_weights += regularizer.backward(self.weights)
+            self.d_bias += regularizer.backward(self.bias)
 
         # propagate gradients to lower layers
         if not self.is_first_layer:

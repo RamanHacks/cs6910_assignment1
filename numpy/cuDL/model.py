@@ -6,6 +6,7 @@ from cuDL.loss import get_loss
 from cuDL.optim import get_optimizer
 from cuDL.activations import get_activation
 from cuDL.metrics import get_metric
+from cuDL.regularizers import get_regularizer
 import cuDL.metrics as metrics
 
 from sklearn.model_selection import train_test_split
@@ -21,7 +22,9 @@ warnings.filterwarnings("ignore")
 
 
 class Model:
-    def __init__(self, name="", layers=None, loss=None, optimizer=None):
+    def __init__(
+        self, name="", layers=None, loss=None, optimizer=None, model_save_path=None
+    ):
 
         self.name = name
         self.layers = layers
@@ -42,6 +45,8 @@ class Model:
             self.optimizer = None
 
         self.metrics = None
+        self.regularizer = None
+        self.model_save_path = model_save_path
 
     def add_layer(self, layer):
         if self.layers is None:
@@ -52,7 +57,15 @@ class Model:
         self.layers.append(layer)
 
     # TODO: change loss and optimizer to some useful defaults
-    def compile(self, loss=None, optimizer=None, learning_rate=0.001, metrics=None):
+    def compile(
+        self,
+        loss=None,
+        optimizer=None,
+        learning_rate=0.001,
+        metrics=None,
+        regularizer=None,
+        weight_decay_rate=0.0,
+    ):
         if loss is None and self.loss is None:
             raise ValueError(
                 "No loss specified, You should specify a loss during model init or compile"
@@ -67,6 +80,11 @@ class Model:
             raise ValueError(
                 "No layers specified, You should specify at least one layer during model init with model add_layer before compile"
             )
+
+        if regularizer is not None:
+            assert isinstance(regularizer, str), "Regularizer name must be a string"
+            # assert weight_decay_rate , "Weight decay rate must be greater than 0"
+            self.regularizer = get_regularizer(regularizer, weight_decay_rate)
 
         self.loss = loss
         self.optimizer = optimizer
@@ -124,6 +142,17 @@ class Model:
         seed=42,
         shuffle=True,
     ):
+        best_loss = np.inf
+        best_metric = 0.0
+
+        if self.model_save_path is None:
+            self.model_save_path = "./models/ckpt.bin"
+            print(
+                "No model save path specified, saving to default path: {}".format(
+                    self.model_save_path
+                )
+            )
+
         def clear_lists():
             self.mean_train_loss = []
             self.mean_val_loss = []
@@ -206,10 +235,13 @@ class Model:
                             metric_func(y_batch, y_pred)
                         )
 
+            train_loss = np.mean(self.mean_train_loss)
+            val_loss = np.mean(self.mean_val_loss)
+
             printing_dict = {
                 "epoch": epoch + 1,
-                "train_loss": round(np.mean(self.mean_train_loss), 2),
-                "val_loss": round(np.mean(self.mean_val_loss), 2),
+                "train_loss": round(train_loss, 2),
+                "val_loss": round(val_loss, 2),
             }
             # print(self.metrics)
             if self.metrics is not None and self.metrics != []:
@@ -219,6 +251,18 @@ class Model:
                     )
             # adds metrics to tqdm progress bar instead of printing
             tk.set_postfix(printing_dict)
+
+            # save best model
+            if val_loss < best_loss:
+                best_loss = val_loss
+                # best_metric = printing_dict[self.metrics[0][0]]
+                # print best metric with 2 decimal places
+                print(
+                    f"Val loss improved from {best_loss:.2f} to {val_loss:.2f}, saving model"
+                )
+                if self.model_save_path is not None:
+                    self.save(self.model_save_path)
+
             # clear the lists for the next epoch
             clear_lists()
 
@@ -231,7 +275,7 @@ class Model:
     def backward(self, y_true, y_pred, *args, **kwargs):
         next_grad = self.loss.backward(y_true, y_pred)
         for layer in self.layers[::-1]:
-            next_grad = layer.backward(next_grad)
+            next_grad = layer.backward(next_grad, self.regularizer)
 
         params = []
         grads = []
@@ -243,7 +287,10 @@ class Model:
 
     def compute_loss(self, y_true, y_pred):
         assert self.loss is not None, "No loss specified"
-        return self.loss.forward(y_true, y_pred)
+        loss = self.loss.forward(y_true, y_pred)
+        if self.regularizer is not None:
+            loss += self.regularizer(self.params)
+        return loss
 
     def update(self, params, grads):
         assert self.optimizer is not None, "No optimizer specified"
@@ -253,7 +300,7 @@ class Model:
         total_params = 0
         # print a summary of the model like keras model_summary
         print("Model Summary")
-        print("=" * 20)
+        print("=" * 30)
         print(f"Layers: {len(self.layers)}")
         for idx, layer in enumerate(self.layers):
             print(f"Layer {idx}: {layer.__class__.__name__}", end="\t")
@@ -263,7 +310,7 @@ class Model:
             total_params += layer.num_params
 
         print(f"Total params: {millify(total_params)}")
-        print("=" * 20)
+        print("=" * 30)
 
     def save(self, path):
         joblib.dump(self, path)
@@ -272,6 +319,13 @@ class Model:
     def load(self, path):
         self = joblib.load(path)
         return self
+
+    @property
+    def params(self):
+        params = []
+        for layer in self.layers:
+            params += layer.params
+        return params
 
     def __str__(self):
         return "Model: {}\nLayers: {}\nLoss: {}\nOptimizer: {}".format(

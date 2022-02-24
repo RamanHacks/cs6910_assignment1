@@ -98,15 +98,15 @@ if __name__ == "__main__":
         help="Number of layers in the model",
     )
     parser.add_argument(
-        "--hidden_size",
-        type=int,
-        default=128,
-        help="Number of hidden units in the model",
+        "--hidden_sizes",
+        type=str,
+        default="128",
+        help="this is an integer or a comma-separated list of integers indicating the number of hidden units in each layer of the model.",
     )
     parser.add_argument(
         "--weight_decay_rate",
         type=float,
-        default=0.0,
+        default=0.0005,
         help="Weight decay rate (L2 regularizer) for training",
     )
     parser.add_argument(
@@ -142,12 +142,19 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args()
 
+    str_hidden_sizes = args.hidden_sizes
+    args.hidden_sizes = [int(x) for x in args.hidden_sizes.split(",")]
+    # if only one number is passed, that means user wants to use the same number of hidden units in each layer
+    if len(args.hidden_sizes) == 1:
+        args.hidden_sizes = [args.hidden_sizes[0]] * args.num_layers
+    assert len(args.hidden_sizes) == args.num_layers
+
     if args.model_dir is None and not args.debug:
         # set a descriptive model directory name
         model_args = [
             "fmnist",
             "L_{}".format(args.num_layers),
-            "HS_{}".format(args.hidden_size),
+            "HS_{}".format(str_hidden_sizes),
             "DR_{}".format(args.weight_decay_rate),
             "O_{}".format(args.optimizer),
             "loss_{}".format(args.loss),
@@ -156,8 +163,11 @@ if __name__ == "__main__":
         args.model_dir = os.path.join(
             f"models/{model_str}",
         )
-        print("Saving models here: {}".format(args.model_dir))
-        os.makedirs(args.model_dir)
+        os.makedirs(args.model_dir, exist_ok=True)
+
+        save_path = os.path.join(args.model_dir, "ckpt.bin")
+
+        print("Saving models here: {}".format(save_path))
     # Set the random seed for reproducibility
     np.random.seed(args.seed)
 
@@ -183,22 +193,22 @@ if __name__ == "__main__":
         plot_images(x_train, y_train)
 
     # Build the model
-    model = Model()
+    model = Model(model_save_path=save_path)
 
     model.add_layer(
         Dense(
             input_dim=x_train.shape[1],
-            output_dim=args.hidden_size,
+            output_dim=args.hidden_sizes[0],
             activation=args.activation,
             init_method=args.weight_init,
         )
     )
 
-    for _ in range(args.num_layers - 2):  # exclude the first and last layer
+    for idx in range(args.num_layers - 1):  # exclude the first layer
         model.add_layer(
             Dense(
-                input_dim=args.hidden_size,
-                output_dim=args.hidden_size,
+                input_dim=args.hidden_sizes[idx],
+                output_dim=args.hidden_sizes[idx + 1],
                 activation=args.activation,
                 init_method=args.weight_init,
             )
@@ -207,7 +217,7 @@ if __name__ == "__main__":
     if args.loss == "cross_entropy":
         model.add_layer(
             Dense(
-                input_dim=args.hidden_size,
+                input_dim=args.hidden_sizes[-1],
                 output_dim=10,
                 activation="softmax",
                 init_method=args.weight_init,
@@ -234,6 +244,8 @@ if __name__ == "__main__":
         optimizer=optimizer,
         learning_rate=args.learning_rate,
         metrics=["accuracy"],
+        regularizer="L2",
+        weight_decay_rate=args.weight_decay_rate,
     )
 
     # Train the model
@@ -246,6 +258,12 @@ if __name__ == "__main__":
         shuffle=args.shuffle,
         seed=args.seed,
     )
+
+    print("=" * 30)
+    print("Evaluating model on test data with best model")
+
+    # load the best model
+    model.load(model.model_save_path)
 
     # Evaluate the model
     model.predict(x_test, y_test, print_classification_metrics=True)

@@ -62,11 +62,30 @@ class Softmax(Activation):
         self.name = "softmax"
 
     def forward(self, x):
+        # https://cs231n.github.io/linear-classify/#softmax
+        # using a normalizing trick to avoid overflow
+        # https://stackoverflow.com/questions/42599498/numercially-stable-softmax/42606665#42606665
+        x -= np.max(x, axis=1, keepdims=True)
+        x = np.exp(x) / np.exp(x).sum(axis=1, keepdims=True)
         self.output = x
-        return np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
+        return x
 
     def backward(self):
-        return np.ones(self.output.shape)
+
+        # https://www.bragitoff.com/2021/12/efficient-implementation-of-softmax-activation-function-and-its-derivative-jacobian-in-python/
+        """Returns the jacobian of the Softmax function for the given set of inputs.
+        Inputs:
+        x: should be a 2d array where the rows correspond to the samples
+            and the columns correspond to the nodes.
+        Returns: jacobian
+        """
+        s = self.output
+        a = np.eye(s.shape[-1])
+        temp1 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
+        temp2 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
+        temp1 = np.einsum("ij,jk->ijk", s, a)
+        temp2 = np.einsum("ij,ik->ijk", s, s)
+        return temp1 - temp2
 
     def __call__(self, x):
         return self.forward(x)
