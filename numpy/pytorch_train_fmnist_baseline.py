@@ -40,23 +40,14 @@ if __name__ == "__main__":
         description="Train a model on the Fashion MNIST dataset"
     )
     parser.add_argument(
-        "--model_dir",
-        type=str,
-        default=None,
-        help="Directory to store the models",
+        "--model_dir", type=str, default=None, help="Directory to store the models",
     )
     # training arguments
     parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=64,
-        help="Batch size for training",
+        "--batch_size", type=int, default=64, help="Batch size for training",
     )
     parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10,
-        help="Number of epochs to train for",
+        "--epochs", type=int, default=10, help="Number of epochs to train for",
     )
     parser.add_argument(
         "--val_split",
@@ -65,28 +56,16 @@ if __name__ == "__main__":
         help="Validation split for training data",
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for training",
+        "--seed", type=int, default=42, help="Random seed for training",
     )
     parser.add_argument(
-        "--shuffle",
-        type=bool,
-        default=True,
-        help="Shuffle the training data",
+        "--shuffle", type=bool, default=True, help="Shuffle the training data",
     )
     parser.add_argument(
-        "--learning_rate",
-        type=float,
-        default=1e-4,
-        help="Learning rate for training",
+        "--learning_rate", type=float, default=1e-4, help="Learning rate for training",
     )
     parser.add_argument(
-        "--num_layers",
-        type=int,
-        default=3,
-        help="Number of layers in the model",
+        "--num_layers", type=int, default=3, help="Number of layers in the model",
     )
     parser.add_argument(
         "--hidden_sizes",
@@ -101,10 +80,16 @@ if __name__ == "__main__":
         help="Weight decay rate (L2 regularizer) for training",
     )
     parser.add_argument(
-        "--optimizer",
-        type=str,
-        default="sgd",
-        help="Optimizer to use for training",
+        "--optimizer", type=str, default="sgd", help="Optimizer to use for training",
+    )
+    parser.add_argument(
+        "--momentum", type=float, default=0.0, help="Momentum for SGD",
+    )
+    parser.add_argument(
+        "--nesterov",
+        action="store_true",
+        default=False,
+        help="Whether to use nesterov",
     )
     parser.add_argument(
         "--weight_init",
@@ -113,25 +98,28 @@ if __name__ == "__main__":
         help="Weight initialization scheme",
     )
     parser.add_argument(
-        "--activation",
-        type=str,
-        default="relu",
-        help="Activation function to use",
+        "--activation", type=str, default="relu", help="Activation function to use",
     )
     parser.add_argument(
-        "--loss",
-        type=str,
-        default="cross_entropy",
-        help="Loss function to use",
+        "--loss", type=str, default="cross_entropy", help="Loss function to use",
     )
     parser.add_argument(
-        "--plot",
-        type=bool,
-        default=False,
-        help="Plot the training data",
+        "--plot", type=bool, default=False, help="Plot the training data",
     )
     parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args()
+
+    if args.momentum > 0.0 and args.optimizer not in ["sgd", "rmsprop"]:
+        print("Momentum is only supported for SGD/RMSprop optimizer")
+        sys.exit(1)
+
+    if args.nesterov and args.optimizer not in ["sgd", "adam"]:
+        print("nesterov is only supported for SGD/adam optimizer")
+        sys.exit(1)
+
+    if args.nesterov and args.momentum == 0.0:
+        print("nesterov requires momentum")
+        sys.exit(1)
 
     str_hidden_sizes = args.hidden_sizes
     args.hidden_sizes = [int(x) for x in args.hidden_sizes.split(",")]
@@ -152,9 +140,7 @@ if __name__ == "__main__":
             "loss_{}".format(args.loss),
         ]
         model_str = "_".join(model_args)
-        args.model_dir = os.path.join(
-            f"models/{model_str}",
-        )
+        args.model_dir = os.path.join(f"models/{model_str}",)
         os.makedirs(args.model_dir, exist_ok=True)
 
         save_path = os.path.join(args.model_dir, "torch_ckpt.bin")
@@ -241,9 +227,17 @@ if __name__ == "__main__":
             model.parameters(),
             lr=args.learning_rate,
             weight_decay=args.weight_decay_rate,
+            momentum=args.momentum,
+            nesterov=args.nesterov,
         )
     elif args.optimizer == "adam":
         optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay_rate,
+        )
+    elif args.optimizer == "nadam":
+        optimizer = torch.optim.NAdam(
             model.parameters(),
             lr=args.learning_rate,
             weight_decay=args.weight_decay_rate,
@@ -253,6 +247,7 @@ if __name__ == "__main__":
             model.parameters(),
             lr=args.learning_rate,
             weight_decay=args.weight_decay_rate,
+            alpha=args.momentum,
         )
     elif args.optimizer == "adagrad":
         optimizer = torch.optim.Adagrad(
@@ -388,11 +383,7 @@ if __name__ == "__main__":
         # print the results
         print(
             "Epoch: {}/{} \tTraining Loss: {:.4f} \tValidation Loss: {:.4f} \tValidation Accuracy: {:.4f}".format(
-                epoch + 1,
-                args.epochs,
-                train_loss,
-                val_loss,
-                val_accuracy,
+                epoch + 1, args.epochs, train_loss, val_loss, val_accuracy,
             )
         )
 

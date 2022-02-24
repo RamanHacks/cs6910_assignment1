@@ -92,6 +92,19 @@ if __name__ == "__main__":
         "--optimizer", type=str, default="sgd", help="Optimizer to use for training",
     )
     parser.add_argument(
+        "--momentum",
+        type=float,
+        default=0.0,
+        help="Momentum for SGD/rmsprop optimizer",
+    )
+    parser.add_argument(
+        "--nesterov",
+        action="store_true",
+        default=False,
+        help="Whether to use nesterov",
+    )
+
+    parser.add_argument(
         "--weight_init",
         type=str,
         default="xavier",
@@ -108,6 +121,23 @@ if __name__ == "__main__":
     )
     parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args()
+
+    if args.momentum > 0.0 and args.optimizer not in ["sgd", "rmsprop"]:
+        print("Momentum is only supported for SGD/RMSprop optimizer")
+        sys.exit(1)
+
+    if args.nesterov and args.optimizer not in ["sgd", "adam"]:
+        print("nesterov is only supported for SGD/adam optimizer")
+        sys.exit(1)
+
+    if args.nesterov and args.momentum == 0.0:
+        print("nesterov requires momentum")
+        sys.exit(1)
+
+    if args.nesterov and args.optimizer == "adam":
+        print("You are trying to use adam with nestrov")
+        print("For simplicity, please use nadam as optimizer name")
+        sys.exit(1)
 
     str_hidden_sizes = args.hidden_sizes
     args.hidden_sizes = [int(x) for x in args.hidden_sizes.split(",")]
@@ -204,10 +234,12 @@ if __name__ == "__main__":
         optimizer=optimizer,
         learning_rate=args.learning_rate,
         metrics=["accuracy"],
-        regularizer=None,
+        regularizer=regularizer,
         weight_decay_rate=args.weight_decay_rate,
         val_metric_to_track="accuracy",
         val_metric_to_track_mode="max",
+        momentum=args.momentum,
+        nesterov=args.nesterov,
     )
 
     # Train the model

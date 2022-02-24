@@ -71,6 +71,7 @@ class Model:
         weight_decay_rate=0.0,
         val_metric_to_track="loss",
         val_metric_to_track_mode="min",
+        **kwargs,
     ):
         if loss is None and self.loss is None:
             raise ValueError(
@@ -123,7 +124,9 @@ class Model:
             ), "Optimizer name passed to model init must be a string"
             # TODO: feels loose, we might need nestrov, momentum and adam based params.
             # perhaps we can set good defaults in optimizers directly but need to find a cleaner way
-            self.optimizer = get_optimizer(self.optimizer, learning_rate=learning_rate)
+            self.optimizer = get_optimizer(
+                self.optimizer, learning_rate=learning_rate, **kwargs
+            )
 
         return self
 
@@ -235,7 +238,9 @@ class Model:
                 #     break
                 X_batch = X_train[i : i + batch_size]
                 y_batch = y_train[i : i + batch_size]
+
                 y_pred = self.forward(X_batch)
+
                 _loss = self.compute_loss(y_batch, y_pred)
 
                 self.mean_train_loss.append(_loss)
