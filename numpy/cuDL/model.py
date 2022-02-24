@@ -6,6 +6,7 @@ from cuDL.loss import get_loss
 from cuDL.optimizer import get_optimizer
 from cuDL.activations import get_activation
 from cuDL.metrics import get_metric
+import cuDL.metrics as metrics
 
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -39,7 +40,7 @@ class Model:
         self.layers.append(layer)
 
     # TODO: change loss and optimizer to some useful defaults
-    def compile(self, loss=None, optimizer=None):
+    def compile(self, loss=None, optimizer=None, learning_rate=0.001, metrics=None):
         if loss is None and self.loss is None:
             raise ValueError(
                 "No loss specified, You should specify a loss during model init or compile"
@@ -54,6 +55,12 @@ class Model:
             raise ValueError(
                 "No layers specified, You should specify at least one layer during model init with model add_layer before compile"
             )
+
+        if metrics is not None:
+            self.metrics = []
+            for metric in metrics:
+                # appending name of the metric and the function
+                self.metrics.append((metric, get_metric(metric)))
 
         # sanity check the layers
         prev_layer = None
@@ -72,12 +79,20 @@ class Model:
             assert isinstance(
                 self.optimizer, str
             ), "Optimizer name passed to model init must be a string"
-            self.optimizer = get_optimizer(self.optimizer)
+            # TODO: feels loose, we might need nestrov, momentum and adam based params.
+            # perhaps we can set good defaults in optimizers directly but need to find a cleaner way
+            self.optimizer = get_optimizer(self.optimizer)(learning_rate=learning_rate)
 
         return self
 
-    def predict(self, X_test):
-        return self.forward(X_test)
+    def predict(self, X_test, y_test=None, print_classification_metrics=False):
+        y_pred = self.forward(X_test)
+        if y_test is not None:
+            if print_classification_metrics:
+                # show this for 2 decimal places
+                print("Test Accuracy: ", round(self.compute_loss(y_test, y_pred), 2))
+                print(metrics.classification_report(y_test, y_pred))
+                print(metrics.confusion_matrix(y_test, y_pred))
 
     def fit(
         self,
@@ -91,10 +106,17 @@ class Model:
         seed=42,
         shuffle=True,
     ):
+        def clear_lists():
+            self.mean_train_loss = []
+            self.mean_val_loss = []
 
-        self.mean_train_loss = []
-        self.mean_val_loss = []
-        self.mean_val_metric = []
+            self.mean_val_metrics = {}
+
+            if self.metrics is not None and self.metrics != []:
+                for (metric_name, _) in self.metrics:
+                    self.mean_val_metrics[metric_name] = []
+
+        clear_lists()
 
         # sanity checks
         assert isinstance(X, np.ndarray), "X must be a numpy array"
@@ -130,7 +152,8 @@ class Model:
         if shuffle:
             X_train, y_train = np_shuffle(X_train, y_train)
 
-        for epoch in tqdm(range(epochs)):
+        tk = tqdm(range(epochs))
+        for epoch in tk:
             for i in range(0, X_train.shape[0], batch_size):
                 X_batch = X_train[i : i + batch_size]
                 y_batch = y_train[i : i + batch_size]
@@ -147,6 +170,27 @@ class Model:
                 y_pred = self.forward(X_batch)
                 loss = self.compute_loss(y_batch, y_pred)
                 self.mean_val_loss.append(loss)
+
+                if self.metrics is not None or self.metrics != []:
+                    for (metric_name, metric_func) in self.metrics:
+                        self.mean_val_metrics[metric_name].append(
+                            metric_func(y_batch, y_pred)
+                        )
+
+            printing_dict = {
+                "epoch": epoch + 1,
+                "train_loss": round(np.mean(self.mean_train_loss), 2),
+                "val_loss": round(np.mean(self.mean_val_loss), 2),
+            }
+            if self.metrics is not None or self.metrics != []:
+                for (metric_name, _) in self.metrics:
+                    printing_dict[metric_name] = round(
+                        np.mean(self.mean_val_metrics[metric_name]), 2
+                    )
+            # adds metrics to tqdm progress bar instead of printing
+            tk.set_postfix(printing_dict)
+            # clear the lists for the next epoch
+            clear_lists()
 
     def forward(self, _input, *args, **kwargs):
         output = _input
@@ -169,6 +213,7 @@ class Model:
         self.optimizer.update(self, *args, **kwargs)
 
     def summary(self):
+        # TODO: implement summary for loss, layers, optimizer
         print("Model:", self.name)
         for layer in self.layers:
             print(layer.summary())

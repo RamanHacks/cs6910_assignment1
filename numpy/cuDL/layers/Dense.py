@@ -5,7 +5,9 @@ from cuDL.initializers import get_initializer
 
 
 class Dense(Layer):
-    def __init__(self, input_dim, output_dim, activation="linear", name=""):
+    def __init__(
+        self, input_dim, output_dim, activation="linear", init_method="xavier", name=""
+    ):
         super().__init__(name)
         # sanity check
         assert isinstance(input_dim, int), "input_dim must be of type int"
@@ -24,9 +26,20 @@ class Dense(Layer):
 
         self.reset_params()
 
-    def reset_params(self):
-        self.weights = get_initializer("random")(self.input_dim, self.output_dim)
-        self.bias = get_initializer("random")(self.output_dim)
+    def reset_params(self, init_method=None):
+        if init_method is None and self.init_method is None:
+            raise ValueError(
+                "No init method specified, You should specify an init method during model init or when calling reset_params"
+            )
+
+        if init_method is not None:
+            self.init_method = init_method
+
+        self.weights = get_initializer(self.init_method)(
+            self.input_dim, self.output_dim
+        )
+        # https://cs231n.github.io/neural-networks-2/ says its common to set bias to zero
+        self.bias = get_initializer("zeros")(self.output_dim)
 
     def compile(self, prev_layer=None):
         if prev_layer is None:
@@ -77,6 +90,11 @@ class Dense(Layer):
     @property
     def params(self):
         return self.weights, self.bias
+
+    @property
+    # return sum of parameters of the model
+    def calc_num_params(self):
+        return self.weights.size + self.bias.size
 
     @property
     def grads(self):
