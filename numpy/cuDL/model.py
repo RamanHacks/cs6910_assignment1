@@ -16,6 +16,7 @@ from numpy.random import shuffle as np_shuffle
 from tqdm import tqdm
 
 from cuDL.utils import millify
+import wandb
 
 import warnings
 
@@ -125,7 +126,10 @@ class Model:
             # TODO: feels loose, we might need nestrov, momentum and adam based params.
             # perhaps we can set good defaults in optimizers directly but need to find a cleaner way
             self.optimizer = get_optimizer(
-                self.optimizer, learning_rate=learning_rate, **kwargs
+                self.optimizer,
+                learning_rate=learning_rate,
+                weight_decay_rate=weight_decay_rate,
+                **kwargs,
             )
 
         return self
@@ -136,7 +140,9 @@ class Model:
         if y_test is not None:
             if print_classification_metrics:
                 # show this for 2 decimal places
-                print("Test Accuracy: {:.2f}".format(metrics.accuracy(y_test, y_pred)))
+                test_acc = metrics.accuracy(y_test, y_pred)
+                wandb.log({"Test Accuracy": test_acc})
+                print("Test Accuracy: {:.2f}".format(test_acc))
                 y_test = y_test.argmax(axis=1)
                 y_pred = y_pred.argmax(axis=1)
                 print(metrics._classification_report(y_test, y_pred))
@@ -290,6 +296,9 @@ class Model:
                 if self.model_save_path is not None:
                     self.save(self.model_save_path)
 
+            printing_dict[f"best_{self.val_metric_to_track}"] = best_metric
+            wandb.log(printing_dict)
+
             # clear the lists for the next epoch
             clear_lists()
 
@@ -313,11 +322,12 @@ class Model:
         return params, grads
 
     def compute_loss(self, y_true, y_pred):
+        reg_loss = 0
         assert self.loss is not None, "No loss specified"
         loss = self.loss.forward(y_true, y_pred)
         if self.regularizer is not None:
-            loss += self.regularizer(self.params)
-        return loss
+            reg_loss = self.regularizer(self.params)
+        return loss + reg_loss
 
     def update(self, params, grads):
         assert self.optimizer is not None, "No optimizer specified"

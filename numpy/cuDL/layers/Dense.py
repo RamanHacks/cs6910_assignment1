@@ -98,10 +98,10 @@ class Dense(Layer):
         # self.d_bias = np.mean(d_activation, axis=1, keepdims=True)
         # self.d_bias = np.sum(d_activation, axis=1, keepdims=1)
 
-        # regularization gradients
-        if regularizer is not None:
-            self.d_weights += regularizer.backward(self.weights)
-            # self.d_bias += regularizer.backward(self.bias)
+        # # regularization gradients
+        # if regularizer is not None:
+        #     self.d_weights += regularizer.backward(self.weights)
+        # self.d_bias += regularizer.backward(self.bias)
 
         # propagate gradients to lower layers
         if not self.is_first_layer:

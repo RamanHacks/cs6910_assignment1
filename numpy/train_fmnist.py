@@ -7,12 +7,14 @@ import sys
 import time
 import argparse
 import numpy as np
-from tensorflow.keras.datasets import fashion_mnist
+from tensorflow.keras.datasets import fashion_mnist, mnist
 from tensorflow.keras.utils import to_categorical
 import matplotlib.pyplot as plt
 
 from cuDL.layers import Dense
 from cuDL.model import Model
+
+import wandb
 
 
 def download_fmnist(data_dir):
@@ -20,6 +22,23 @@ def download_fmnist(data_dir):
     Download the fashion mnist dataset
     """
     (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+
+    # Reshape and normalize the data
+    x_train = x_train.reshape(x_train.shape[0], -1)
+    x_test = x_test.reshape(x_test.shape[0], -1)
+    x_train = x_train.astype("float32") / 255
+    x_test = x_test.astype("float32") / 255
+
+    # Convert the labels to categorical one-hot encoding
+    y_train = to_categorical(y_train, 10)
+    y_test = to_categorical(y_test, 10)
+
+    return (x_train, y_train), (x_test, y_test)
+
+
+def download_mnist(data_dir):
+
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
     # Reshape and normalize the data
     x_train = x_train.reshape(x_train.shape[0], -1)
@@ -44,6 +63,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_dir", type=str, default=None, help="Directory to store the models",
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="fmnist", help="fmnist",
     )
     parser.add_argument(
         "--model_name",
@@ -98,10 +120,7 @@ if __name__ == "__main__":
         help="Momentum for SGD/rmsprop optimizer",
     )
     parser.add_argument(
-        "--nesterov",
-        action="store_true",
-        default=False,
-        help="Whether to use nesterov",
+        "--nesterov", type=bool, default=False, help="Whether to use nesterov",
     )
 
     parser.add_argument(
@@ -120,24 +139,31 @@ if __name__ == "__main__":
         "--plot", type=bool, default=False, help="Plot the training data",
     )
     parser.add_argument("--debug", action="store_true", default=False)
+
+    # add wandb arguments
+    parser.add_argument(
+        "--wandb_project", type=str, default=None, help="W&B project name"
+    )
+    parser.add_argument(
+        "--wandb_entity", type=str, default=None, help="W&B entity name"
+    )
     args = parser.parse_args()
 
     if args.momentum > 0.0 and args.optimizer not in ["sgd", "rmsprop"]:
         print("Momentum is only supported for SGD/RMSprop optimizer")
         sys.exit(1)
 
-    if args.nesterov and args.optimizer not in ["sgd", "adam"]:
-        print("nesterov is only supported for SGD/adam optimizer")
-        sys.exit(1)
-
-    if args.nesterov and args.momentum == 0.0:
-        print("nesterov requires momentum")
+    if args.nesterov and args.optimizer not in ["sgd", "nadam"]:
+        print("nesterov is only supported for SGD/nadam optimizer")
         sys.exit(1)
 
     if args.nesterov and args.optimizer == "adam":
         print("You are trying to use adam with nestrov")
         print("For simplicity, please use nadam as optimizer name")
         sys.exit(1)
+
+    if args.optimizer == "nadam":
+        assert args.nesterov, "nadam requires nesterov"
 
     str_hidden_sizes = args.hidden_sizes
     args.hidden_sizes = [int(x) for x in args.hidden_sizes.split(",")]
@@ -149,7 +175,7 @@ if __name__ == "__main__":
     if args.model_dir is None and not args.debug:
         # set a descriptive model directory name
         model_args = [
-            "fmnist",
+            "{}".format(args.dataset),
             "L_{}".format(args.num_layers),
             "HS_{}".format(str_hidden_sizes),
             "DR_{}".format(args.weight_decay_rate),
@@ -177,7 +203,50 @@ if __name__ == "__main__":
     print("=" * 30)
 
     # Download the Fashion MNIST dataset
-    (x_train, y_train), (x_test, y_test) = download_fmnist(args.model_dir)
+    if args.dataset == "fmnist":
+        (x_train, y_train), (x_test, y_test) = download_fmnist(args.model_dir)
+    elif args.dataset == "mnist":
+        (x_train, y_train), (x_test, y_test) = download_mnist(args.model_dir)
+
+    if args.wandb_project is not None:
+        elaborate_optimizer_name = args.optimizer
+        if args.optimizer == "sgd":
+            if args.nesterov:
+                elaborate_optimizer_name += "_nesterov"
+            elif args.momentum > 0.0:
+                elaborate_optimizer_name += "_{}".format(args.momentum)
+
+        # descriptive name for the run
+        args.wandb_suffix = "_".join(
+            [
+                args.dataset,
+                "O_{}".format(elaborate_optimizer_name),
+                "A_{}".format(args.activation),
+                "LR_{}".format(args.learning_rate),
+                "L_{}".format(args.num_layers),
+                "HS_{}".format(str_hidden_sizes),
+                "BS_{}".format(args.batch_size),
+                "WI_{}".format(args.weight_init),
+                "DR_{}".format(args.weight_decay_rate),
+                "loss_{}".format(args.loss),
+            ]
+        )
+        if args.wandb_entity is not None:
+
+            wandb.init(
+                project=args.wandb_project,
+                name=args.wandb_suffix,
+                config=vars(args),
+                dir=args.model_dir,
+                entity=args.wandb_entity,
+            )
+        else:
+            wandb.init(
+                project=args.wandb_project,
+                name=args.wandb_suffix,
+                config=vars(args),
+                dir=args.model_dir,
+            )
 
     if args.debug:
         x_train = x_train[:100]

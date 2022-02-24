@@ -43,10 +43,12 @@ class L2(Regularizer):
 
     def forward(self, W):
         self.last_W = W
-        return 0.5 * self.l * np.sum(W**2)
+        m = W.shape[-1]
+        return 0.5 * self.l * np.sum(W ** 2) / m
 
     def backward(self, W=None):
         self.last_W = W if W is not None else self.last_W
+        m = self.last_W.shape[1]
         return self.l * self.last_W
 
     def __call__(self, W):

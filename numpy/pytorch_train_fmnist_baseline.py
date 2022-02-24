@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.datasets import fashion_mnist
+from tensorflow.keras.datasets import fashion_mnist, mnist
 from tensorflow.keras.utils import to_categorical
 
 from tqdm import tqdm
@@ -34,10 +34,30 @@ def download_fmnist(data_dir):
     return (x_train, y_train), (x_test, y_test)
 
 
+def download_mnist(data_dir):
+
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+    # Reshape and normalize the data
+    x_train = x_train.reshape(x_train.shape[0], -1)
+    x_test = x_test.reshape(x_test.shape[0], -1)
+    x_train = x_train.astype("float32") / 255
+    x_test = x_test.astype("float32") / 255
+
+    # Convert the labels to categorical one-hot encoding
+    # y_train = to_categorical(y_train, 10)
+    # y_test = to_categorical(y_test, 10)
+
+    return (x_train, y_train), (x_test, y_test)
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Train a model on the Fashion MNIST dataset"
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="fmnist", help="fmnist",
     )
     parser.add_argument(
         "--model_dir", type=str, default=None, help="Directory to store the models",
@@ -113,12 +133,8 @@ if __name__ == "__main__":
         print("Momentum is only supported for SGD/RMSprop optimizer")
         sys.exit(1)
 
-    if args.nesterov and args.optimizer not in ["sgd", "adam"]:
-        print("nesterov is only supported for SGD/adam optimizer")
-        sys.exit(1)
-
-    if args.nesterov and args.momentum == 0.0:
-        print("nesterov requires momentum")
+    if args.nesterov and args.optimizer not in ["sgd", "nadam"]:
+        print("nesterov is only supported for SGD/nadam optimizer")
         sys.exit(1)
 
     str_hidden_sizes = args.hidden_sizes
@@ -155,7 +171,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Download the Fashion MNIST dataset
-    (x_train, y_train), (x_test, y_test) = download_fmnist(data_dir="data")
+    if args.dataset == "fmnist":
+        (x_train, y_train), (x_test, y_test) = download_fmnist(args.model_dir)
+    elif args.dataset == "mnist":
+        (x_train, y_train), (x_test, y_test) = download_mnist(args.model_dir)
 
     # make crossentropy loss work with one hot encoding
     def cross_entropy_one_hot(_input, target):

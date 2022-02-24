@@ -13,10 +13,8 @@ def get_optimizer(name, learning_rate, **kwargs):
         return SGD(lr=learning_rate, **kwargs)
     elif name == "rmsprop":
         return RMSprop(lr=learning_rate, **kwargs)
-    elif name == "adam":
+    elif name == "adam" or name == "nadam":
         return Adam(lr=learning_rate, **kwargs)
-    elif name == "nadam":
-        return Adam(lr=learning_rate, nesterov=True, **kwargs)
     else:
         raise ValueError(f"Unknown optimizer: {name}")
 
@@ -45,7 +43,8 @@ class SGD(Optimizer):
         # weight decay
         if self._lambda != 0:
             for param, grad in zip(params, grads):
-                grad += self._lambda * param
+                m = param.shape[-1]
+                grad += self._lambda * param / m
         # for nag, instead of computing gradient at look ahead weights, we use bengio's trick to compute gradient at current weights
         # explanation: https://ruder.io/optimizing-gradient-descent/#nadam (Ctrl + F "Dozat")
         if self.momentum != 0 and self.nesterov:
@@ -87,7 +86,8 @@ class RMSprop(Optimizer):
         # weight decay
         if self._lambda != 0:
             for param, grad in zip(params, grads):
-                grad += self._lambda * param
+                m = param.shape[-1]
+                grad += self._lambda * param / m
         # update history
         for idx, (param, grad, history) in enumerate(zip(params, grads, self.history)):
             history = self.momentum * history + (1 - self.momentum) * grad ** 2
@@ -136,7 +136,8 @@ class Adam(Optimizer):
         # weight decay
         if self._lambda != 0:
             for param, grad in zip(params, grads):
-                grad += self._lambda * param
+                m = param.shape[-1]
+                grad += self._lambda * param / m
         for idx, (param, grad, m, v) in enumerate(zip(params, grads, self.m, self.v)):
             m = (self.beta_1 * m) + ((1 - self.beta_1) * grad)
             v = (self.beta_2 * v) + ((1 - self.beta_2) * (grad ** 2))
@@ -148,11 +149,11 @@ class Adam(Optimizer):
                 # https://paperswithcode.com/method/nadam
                 # https://ruder.io/optimizing-gradient-descent/index.html#nadam
                 param -= (
-                    self.learning_rate
+                    self.lr
                     / (np.sqrt(vhat) + self.eps)
                     * (
                         self.beta_1 * mhat
-                        + (1 - self.beta_1) * grad / (1 - self.beta_1 ** self.t)
+                        + (1 - self.beta_1) * grad / (1 - self.beta_1 ** self.iter)
                     )
                 )
             else:

@@ -14,6 +14,8 @@ def get_activation(name):
         return Softmax()
     elif name == "relu":
         return Relu()
+    elif name == "tanh":
+        return Tanh()
     else:
         raise ValueError(f"Unknown activation: {name}")
 
@@ -134,7 +136,7 @@ class Tanh(Activation):
         return x
 
     def backward(self):
-        return 1 - self.output**2
+        return 1 - self.output ** 2
 
     def __call__(self, x):
         return self.forward(x)
