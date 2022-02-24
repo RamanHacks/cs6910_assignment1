@@ -31,6 +31,9 @@ class Activation(metaclass=abc.ABCMeta):
 
 
 class Linear(Activation):
+    def __init__(self):
+        self.name = "linear"
+
     def forward(self, x):
         self.output = x
         return x
@@ -70,22 +73,26 @@ class Softmax(Activation):
         self.output = x
         return x
 
-    def backward(self):
+    # def backward(self):
 
-        # https://www.bragitoff.com/2021/12/efficient-implementation-of-softmax-activation-function-and-its-derivative-jacobian-in-python/
-        """Returns the jacobian of the Softmax function for the given set of inputs.
-        Inputs:
-        x: should be a 2d array where the rows correspond to the samples
-            and the columns correspond to the nodes.
-        Returns: jacobian
-        """
-        s = self.output
-        a = np.eye(s.shape[-1])
-        temp1 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
-        temp2 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
-        temp1 = np.einsum("ij,jk->ijk", s, a)
-        temp2 = np.einsum("ij,ik->ijk", s, s)
-        return temp1 - temp2
+    #     # https://www.bragitoff.com/2021/12/efficient-implementation-of-softmax-activation-function-and-its-derivative-jacobian-in-python/
+    #     """Returns the jacobian of the Softmax function for the given set of inputs.
+    #     Inputs:
+    #     x: should be a 2d array where the rows correspond to the samples
+    #         and the columns correspond to the nodes.
+    #     Returns: jacobian
+    #     """
+    #     s = self.output
+    #     a = np.eye(s.shape[-1])
+    #     temp1 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
+    #     temp2 = np.zeros((s.shape[0], s.shape[1], s.shape[1]), dtype=np.float32)
+    #     temp1 = np.einsum("ij,jk->ijk", s, a)
+    #     temp2 = np.einsum("ij,ik->ijk", s, s)
+    #     return temp1 - temp2
+
+    def backward(self, grad):
+        # https://sgugger.github.io/a-simple-neural-net-in-numpy.html#a-simple-neural-net-in-numpy
+        return self.output * (grad - (grad * self.output).sum(axis=1)[:, None])
 
     def __call__(self, x):
         return self.forward(x)
@@ -96,7 +103,7 @@ class Relu(Activation):
         self.name = "relu"
 
     def forward(self, x):
-        self.output = x
+        self.output = np.copy(x)
         return np.maximum(x, 0)
 
     def backward(self):

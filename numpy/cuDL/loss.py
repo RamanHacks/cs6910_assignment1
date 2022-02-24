@@ -31,7 +31,7 @@ class MSE(Loss):
         return 1 / 2 * np.mean(np.sum((y_true - y_pred) ** 2, axis=1))
 
     def backward(self, y_true, y_pred):
-        return 2 * (y_pred - y_true) / y_true.shape[0]
+        return (y_pred - y_true) / y_true.shape[0]
 
     def __call__(self, y_true, y_pred):
         return self.forward(y_true, y_pred)
@@ -47,7 +47,8 @@ class CrossEntropy(Loss):
 
     def backward(self, y_true, y_pred):
         y_pred = np.clip(y_pred, self.eps, 1 - self.eps)
-        return y_pred - y_true
+        # return y_pred - y_true
+        return np.where(y_true == 1, -1 / y_pred, 0)
 
     def __call__(self, y_true, y_pred):
         return self.forward(y_true, y_pred)

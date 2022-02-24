@@ -74,13 +74,16 @@ class Dense(Layer):
         assert pre_grad.shape[0] > 0, f"pre_grad must have at least one row"
 
         # compute gradients
-        d_activation = self.activation.backward()
+        # d_activation = self.activation.backward()
 
         # check if pred_grad and d_activation have dimesions
-        if pre_grad.ndim != d_activation.ndim:
-            # for softmax activation
-            d_activation = np.einsum("ijk,ik->ij", d_activation, pre_grad)
+        # if pre_grad.ndim != d_activation.ndim:
+        #     # for softmax activation
+        #     d_activation = np.einsum("ijk,ik->ij", d_activation, pre_grad)
+        if self.activation.name == "softmax":
+            d_activation = self.activation.backward(pre_grad)
         else:
+            d_activation = self.activation.backward()
             d_activation = pre_grad * d_activation
 
         self.d_weights = self._input.T.dot(d_activation)

@@ -180,6 +180,8 @@ if __name__ == "__main__":
         criterion = nn.CrossEntropyLoss()
     elif args.loss == "mse":
         criterion = torch.nn.MSELoss()
+        y_train = to_categorical(y_train, 10)
+        y_test = to_categorical(y_test, 10)
         # final_activation = None
 
     # get activation from torch corresponding to the args activation
@@ -274,11 +276,18 @@ if __name__ == "__main__":
 
     # convert to tensors
     x_train = torch.tensor(x_train).float()
-    y_train = torch.tensor(y_train).long()
     x_val = torch.tensor(x_val).float()
-    y_val = torch.tensor(y_val).long()
     x_test = torch.tensor(x_test).float()
-    y_test = torch.tensor(y_test).long()
+
+    if args.loss == "cross_entropy":
+        y_train = torch.tensor(y_train).long()
+        y_val = torch.tensor(y_val).long()
+
+        y_test = torch.tensor(y_test).long()
+    else:
+        y_train = torch.tensor(y_train).float()
+        y_val = torch.tensor(y_val).float()
+        y_test = torch.tensor(y_test).float()
 
     # print the shapes of the data
     print("x_train shape:", x_train.shape)
@@ -341,11 +350,24 @@ if __name__ == "__main__":
                 loss = criterion(y_pred, y_batch)
 
                 val_loss.append(loss.item())
-                val_accuracy.append(
-                    np.mean(
-                        np.argmax(y_pred.cpu().numpy(), axis=1) == y_batch.cpu().numpy()
+                if args.loss == "cross_entropy":
+                    val_accuracy.append(
+                        np.mean(
+                            np.argmax(y_pred.cpu().numpy(), axis=1)
+                            == y_batch.cpu().numpy()
+                        )
                     )
-                )
+                else:
+                    # print("Preds:", y_pred.cpu().numpy())
+                    # print("Labels:", y_batch.cpu().numpy())
+                    # print("Preds:", np.argmax(y_pred.cpu().numpy(), axis=1))
+                    # print("Labels: ", np.argmax(y_batch.cpu().numpy(), axis=1))
+                    val_accuracy.append(
+                        np.mean(
+                            np.argmax(y_pred.cpu().numpy(), axis=1)
+                            == np.argmax(y_batch.cpu().numpy(), axis=1)
+                        )
+                    )
 
         return np.mean(val_loss), np.mean(val_accuracy)
 

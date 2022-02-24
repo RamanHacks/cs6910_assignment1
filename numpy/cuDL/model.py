@@ -1,4 +1,5 @@
 import re
+from turtle import st
 import joblib
 from cuDL.layers import Layer
 
@@ -48,6 +49,9 @@ class Model:
         self.regularizer = None
         self.model_save_path = model_save_path
 
+        self.val_metric_to_track = None
+        self.val_metric_to_track_mode = None
+
     def add_layer(self, layer):
         if self.layers is None:
             self.layers = []
@@ -65,6 +69,8 @@ class Model:
         metrics=None,
         regularizer=None,
         weight_decay_rate=0.0,
+        val_metric_to_track="loss",
+        val_metric_to_track_mode="min",
     ):
         if loss is None and self.loss is None:
             raise ValueError(
@@ -88,6 +94,9 @@ class Model:
 
         self.loss = loss
         self.optimizer = optimizer
+
+        self.val_metric_to_track = val_metric_to_track
+        self.val_metric_to_track_mode = val_metric_to_track_mode
 
         if metrics is not None:
             self.metrics = []
@@ -124,7 +133,7 @@ class Model:
         if y_test is not None:
             if print_classification_metrics:
                 # show this for 2 decimal places
-                print("Accuracy: {:.2f}".format(metrics.accuracy(y_test, y_pred)))
+                print("Test Accuracy: {:.2f}".format(metrics.accuracy(y_test, y_pred)))
                 y_test = y_test.argmax(axis=1)
                 y_pred = y_pred.argmax(axis=1)
                 print(metrics._classification_report(y_test, y_pred))
@@ -142,8 +151,13 @@ class Model:
         seed=42,
         shuffle=True,
     ):
-        best_loss = np.inf
-        best_metric = 0.0
+
+        if self.val_metric_to_track_mode == "min":
+            best_metric = np.inf
+            compare_func = np.less
+        elif self.val_metric_to_track_mode == "max":
+            best_metric = -np.inf
+            compare_func = np.greater
 
         if self.model_save_path is None:
             self.model_save_path = "./models/ckpt.bin"
@@ -164,6 +178,17 @@ class Model:
                     self.mean_val_metrics[metric_name] = []
 
         clear_lists()
+
+        if self.val_metric_to_track == "loss":
+            self.val_metric_to_track = "val_loss"
+        elif self.val_metric_to_track not in [
+            metric_name for (metric_name, _) in self.metrics
+        ]:
+            raise ValueError(
+                f"Validation metric to track {self.val_metric_to_track} not in metrics {self.metrics}"
+            )
+        else:
+            self.val_metric_to_track = "val_" + self.val_metric_to_track
 
         # sanity checks
         assert isinstance(X, np.ndarray), "X must be a numpy array"
@@ -246,20 +271,16 @@ class Model:
             # print(self.metrics)
             if self.metrics is not None and self.metrics != []:
                 for (metric_name, _) in self.metrics:
-                    printing_dict[metric_name] = round(
+                    printing_dict["val_" + metric_name] = round(
                         np.mean(self.mean_val_metrics[metric_name]), 2
                     )
             # adds metrics to tqdm progress bar instead of printing
             tk.set_postfix(printing_dict)
 
-            # save best model
-            if val_loss < best_loss:
-                best_loss = val_loss
-                # best_metric = printing_dict[self.metrics[0][0]]
-                # print best metric with 2 decimal places
-                print(
-                    f"Val loss improved from {best_loss:.2f} to {val_loss:.2f}, saving model"
-                )
+            # save model if validation metric improved
+            if compare_func(printing_dict[self.val_metric_to_track], best_metric):
+                best_metric = printing_dict[self.val_metric_to_track]
+                print(f"Saving model with {self.val_metric_to_track} {best_metric}.")
                 if self.model_save_path is not None:
                     self.save(self.model_save_path)
 
@@ -306,6 +327,7 @@ class Model:
             print(f"Layer {idx}: {layer.__class__.__name__}", end="\t")
             print(f"Input shape: ({batch_size, layer.input_dim})", end="\t")
             print(f"Output shape: ({batch_size, layer.output_dim})", end="\t")
+            print(f"Activation: {layer.activation.name}")
             print(f"Params: {layer.num_params}")
             total_params += layer.num_params
 
@@ -313,12 +335,15 @@ class Model:
         print("=" * 30)
 
     def save(self, path):
-        joblib.dump(self, path)
+        # save the model parameters
+        with open(path, "wb") as f:
+            joblib.dump(self, f)
 
     @classmethod
     def load(self, path):
-        self = joblib.load(path)
-        return self
+        # load the model parameters
+        with open(path, "rb") as f:
+            return joblib.load(f)
 
     @property
     def params(self):

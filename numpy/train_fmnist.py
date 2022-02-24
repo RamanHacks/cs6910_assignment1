@@ -226,7 +226,7 @@ if __name__ == "__main__":
     elif args.loss == "mse":
         model.add_layer(
             Dense(
-                input_dim=args.hidden_size,
+                input_dim=args.hidden_sizes[-1],
                 output_dim=10,
                 activation="linear",
                 init_method=args.weight_init,
@@ -246,6 +246,8 @@ if __name__ == "__main__":
         metrics=["accuracy"],
         regularizer="L2",
         weight_decay_rate=args.weight_decay_rate,
+        val_metric_to_track="accuracy",
+        val_metric_to_track_mode="max",
     )
 
     # Train the model
@@ -263,7 +265,7 @@ if __name__ == "__main__":
     print("Evaluating model on test data with best model")
 
     # load the best model
-    model.load(model.model_save_path)
+    model = model.load(model.model_save_path)
 
     # Evaluate the model
     model.predict(x_test, y_test, print_classification_metrics=True)
