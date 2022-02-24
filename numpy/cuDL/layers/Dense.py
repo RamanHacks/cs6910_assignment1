@@ -89,7 +89,7 @@ class Dense(Layer):
         # regularization gradients
         if regularizer is not None:
             self.d_weights += regularizer.backward(self.weights)
-            self.d_bias += regularizer.backward(self.bias)
+            # self.d_bias += regularizer.backward(self.bias)
 
         # propagate gradients to lower layers
         if not self.is_first_layer:
