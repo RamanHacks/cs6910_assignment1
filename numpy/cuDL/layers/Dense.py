@@ -73,6 +73,8 @@ class Dense(Layer):
         ), f"pre_grad must have {self.output_dim} columns"
         assert pre_grad.shape[0] > 0, f"pre_grad must have at least one row"
 
+        m = pre_grad.shape[1]
+
         # compute gradients
         # d_activation = self.activation.backward()
 
@@ -86,8 +88,9 @@ class Dense(Layer):
             d_activation = self.activation.backward()
             d_activation = pre_grad * d_activation
 
-        self.d_weights = self._input.T.dot(d_activation)
-        self.d_bias = d_activation.mean(axis=0)
+        self.d_weights = self._input.T.dot(d_activation) / m
+        # self.d_bias = d_activation.mean(axis=0) / m
+        self.d_bias = np.sum(d_activation, axis=1, keepdims=1) / m
 
         # regularization gradients
         if regularizer is not None:
@@ -110,4 +113,8 @@ class Dense(Layer):
 
     @property
     def grads(self):
-        return self.d_weights, self.d_bias
+        return self.d_weights, self.bias
+
+    def zero_grad(self):
+        self.d_weights = np.zeros_like(self.weights)
+        self.d_bias = np.zeros_like(self.bias)

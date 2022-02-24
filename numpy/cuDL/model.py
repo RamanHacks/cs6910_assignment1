@@ -243,6 +243,7 @@ class Model:
                 # backprop and update gradients
                 params, grads = self.backward(y_batch, y_pred)
                 self.update(params, grads)
+                self.zero_grad()
 
             for i in range(0, X_val.shape[0], batch_size):
                 # # skip last batch if it is not full
@@ -356,3 +357,7 @@ class Model:
         return "Model: {}\nLayers: {}\nLoss: {}\nOptimizer: {}".format(
             self.name, self.layers, self.loss, self.optimizer
         )
+
+    def zero_grad(self):
+        for layer in self.layers:
+            layer.zero_grad()

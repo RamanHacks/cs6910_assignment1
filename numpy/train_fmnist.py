@@ -219,7 +219,8 @@ if __name__ == "__main__":
             Dense(
                 input_dim=args.hidden_sizes[-1],
                 output_dim=10,
-                activation="softmax",
+                # activation="softmax",
+                activation="linear",  # we do softmax in the loss function
                 init_method=args.weight_init,
             )
         )
@@ -244,7 +245,7 @@ if __name__ == "__main__":
         optimizer=optimizer,
         learning_rate=args.learning_rate,
         metrics=["accuracy"],
-        regularizer="L2",
+        regularizer=None,
         weight_decay_rate=args.weight_decay_rate,
         val_metric_to_track="accuracy",
         val_metric_to_track_mode="max",
