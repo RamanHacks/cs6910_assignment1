@@ -23,27 +23,32 @@ def random_init(*shape):
     weights = np.random.rand(*shape)
     # normalize the weights
     weights = weights / np.linalg.norm(weights)
-    return weights
+    return weights.astype(np.float32)
 
 
 def zeros_init(*shape):
-    return np.zeros(*shape)
+    return np.zeros(*shape).astype(np.float32)
 
 
 def ones_init(*shape):
-    return np.ones(*shape)
+    return np.ones(*shape).astype(np.float32)
 
 
 def xavier_init(*shape):
+    # glorot normal
 
-    mu, sigma = 0, 0.1  # mean and standard deviation
     assert len(shape) == 2, "xavier_init only supports 2D tensors"
     in_dim, out_dim = shape[0], shape[1]
-    return np.random.normal(mu, sigma, (in_dim, out_dim)) * np.sqrt(
-        2.0 / (in_dim + out_dim)
-    )
+
+    scale = np.sqrt(2 / (in_dim + out_dim))
+    mu = 0
+
+    # return np.random.randn(*shape).astype(np.float32) * scale.astype(np.float32)
+    return np.random.normal(mu, scale, size=shape).astype(np.float32)
 
 
 def he_init(*shape):
     assert len(shape) == 2, "he_init only supports 2D tensors"
-    return np.random.randn(*shape) * np.sqrt(2.0 / shape[0])
+    return np.random.randn(*shape).astype(np.float32) * np.sqrt(2.0 / shape[0]).astype(
+        np.float32
+    )

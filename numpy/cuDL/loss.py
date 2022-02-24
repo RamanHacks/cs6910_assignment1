@@ -34,7 +34,7 @@ class MSE(Loss):
         return 1 / 2 * np.mean(np.sum((y_true - y_pred) ** 2, axis=1))
 
     def backward(self, y_true, y_pred):
-        return (y_pred - y_true) / y_true.shape[0]
+        return y_pred - y_true
 
     def __call__(self, y_true, y_pred):
         return self.forward(y_true, y_pred)
@@ -72,12 +72,12 @@ class CrossEntropy(Loss):
 
     def backward(self, y_true, y_pred):
         # https://deepnotes.io/softmax-crossentropy
-        y_true = y_true.argmax(axis=1)
+        # y_true = y_true.argmax(axis=1)
 
         m = y_true.shape[0]
         grad = self.softmax(y_pred)
-        grad[range(m), y_true] -= 1
-        grad = grad / m
+        grad = (grad - y_true) / m
+        # grad = grad / m
         return grad
 
     def __call__(self, y_true, y_pred):

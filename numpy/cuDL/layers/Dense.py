@@ -58,7 +58,7 @@ class Dense(Layer):
         ), f"input to forward must have {self.input_dim} columns"
         assert _input.shape[0] > 0, f"input to forward must have at least one row"
 
-        self._input = _input
+        self._input = np.copy(_input)
 
         outputs = np.dot(_input, self.weights) + self.bias
         outputs = self.activation(outputs)
@@ -88,9 +88,15 @@ class Dense(Layer):
             d_activation = self.activation.backward()
             d_activation = pre_grad * d_activation
 
-        self.d_weights = self._input.T.dot(d_activation) / m
-        # self.d_bias = d_activation.mean(axis=0) / m
-        self.d_bias = np.sum(d_activation, axis=1, keepdims=1) / m
+        self.d_weights = self._input.T.dot(d_activation)
+        self.d_bias = d_activation.mean(axis=0)
+
+        # print(d_activation.shape)
+        # print(self._input.shape)
+
+        # self.d_weights = 1 / m * (d_activation @ self._input.T)
+        # self.d_bias = np.mean(d_activation, axis=1, keepdims=True)
+        # self.d_bias = np.sum(d_activation, axis=1, keepdims=1)
 
         # regularization gradients
         if regularizer is not None:
@@ -100,6 +106,8 @@ class Dense(Layer):
         # propagate gradients to lower layers
         if not self.is_first_layer:
             d_input = np.dot(d_activation, self.weights.T)
+            # d_input = self.weights.T @ d_activation
+
             return d_input
 
     @property
@@ -116,5 +124,5 @@ class Dense(Layer):
         return self.d_weights, self.bias
 
     def zero_grad(self):
-        self.d_weights = np.zeros_like(self.weights)
-        self.d_bias = np.zeros_like(self.bias)
+        self.d_weights = np.ones_like(self.weights)
+        self.d_bias = np.ones_like(self.bias)

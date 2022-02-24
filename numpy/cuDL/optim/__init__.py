@@ -1,3 +1,4 @@
+import enum
 import numpy as np
 import abc
 
@@ -36,6 +37,7 @@ class Adam(Optimizer):
         beta_1=0.9,
         beta_2=0.999,
         eps=eps,
+        weight_decay_rate=0.0,
         **kwargs,
     ):
         self.lr = lr
@@ -43,32 +45,41 @@ class Adam(Optimizer):
         self.beta_2 = beta_2
         self.eps = eps
 
-        # self.iter = 0
+        self._lambda = weight_decay_rate
+
+        self.iter = 0
         self.m = None
         self.v = None
-        self.t = None
 
     def update(self, params, grads):
         if self.m is None:
-            self.m, self.v, self.t = [], [], []
+            self.m, self.v = [], []
             for param in params:
                 self.m.append(np.zeros_like(param))
                 self.v.append(np.zeros_like(param))
-                self.t.append(np.zeros_like(param))
-        # self.iter += 1
-        lr = self.lr
+        self.iter += 1
+        bias_correction_constant = (
+            self.lr * np.sqrt(1 - self.beta_2 ** self.iter) / (1 - self.beta_1 ** self.iter)
+        )
 
-        for param, grad, m, v, t in zip(params, grads, self.m, self.v, self.t):
+        # weight decay
+        if self._lambda != 0:
+            for param, grad in zip(params, grads):
+                grad += self._lambda * param
+        for idx, (param, grad, m, v) in enumerate(zip(params, grads, self.m, self.v)):
             m = (self.beta_1 * m) + ((1 - self.beta_1) * grad)
-            v = (self.beta_2 * v) + ((1 - self.beta_2) * (grad**2))
+            v = (self.beta_2 * v) + ((1 - self.beta_2) * (grad ** 2))
 
-            t = t + 1
+            # # add bias correction
+            # # results are slightly better without bias correction
+            # # TODO: need to double check
+            # m_hat = m / (1 - self.beta_1 ** self.iter)
+            # v_hat = v / (1 - self.beta_2 ** self.iter)
 
-            # add bias correction
-            # results are slightly better without bias correction
-            # TODO: need to double check
-            m_hat = m / (1 - self.beta_1**t)
-            v_hat = v / (1 - self.beta_2**t)
+            param -= m * bias_correction_constant / (np.sqrt(v) + self.eps)
 
-            param -= lr * m_hat / (np.sqrt(v_hat) + self.eps)
+            # update m and v
+            self.m[idx] = m
+            self.v[idx] = v
+
         return params

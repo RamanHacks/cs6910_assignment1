@@ -43,10 +43,7 @@ if __name__ == "__main__":
         description="Train a model on the Fashion MNIST dataset"
     )
     parser.add_argument(
-        "--model_dir",
-        type=str,
-        default=None,
-        help="Directory to store the models",
+        "--model_dir", type=str, default=None, help="Directory to store the models",
     )
     parser.add_argument(
         "--model_name",
@@ -56,16 +53,10 @@ if __name__ == "__main__":
     )
     # training arguments
     parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=64,
-        help="Batch size for training",
+        "--batch_size", type=int, default=64, help="Batch size for training",
     )
     parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10,
-        help="Number of epochs to train for",
+        "--epochs", type=int, default=10, help="Number of epochs to train for",
     )
     parser.add_argument(
         "--val_split",
@@ -74,28 +65,16 @@ if __name__ == "__main__":
         help="Validation split for training data",
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for training",
+        "--seed", type=int, default=42, help="Random seed for training",
     )
     parser.add_argument(
-        "--shuffle",
-        type=bool,
-        default=True,
-        help="Shuffle the training data",
+        "--shuffle", type=bool, default=True, help="Shuffle the training data",
     )
     parser.add_argument(
-        "--learning_rate",
-        type=float,
-        default=1e-4,
-        help="Learning rate for training",
+        "--learning_rate", type=float, default=1e-4, help="Learning rate for training",
     )
     parser.add_argument(
-        "--num_layers",
-        type=int,
-        default=3,
-        help="Number of layers in the model",
+        "--num_layers", type=int, default=3, help="Number of layers in the model",
     )
     parser.add_argument(
         "--hidden_sizes",
@@ -110,10 +89,7 @@ if __name__ == "__main__":
         help="Weight decay rate (L2 regularizer) for training",
     )
     parser.add_argument(
-        "--optimizer",
-        type=str,
-        default="sgd",
-        help="Optimizer to use for training",
+        "--optimizer", type=str, default="sgd", help="Optimizer to use for training",
     )
     parser.add_argument(
         "--weight_init",
@@ -122,22 +98,13 @@ if __name__ == "__main__":
         help="Weight initialization scheme",
     )
     parser.add_argument(
-        "--activation",
-        type=str,
-        default="relu",
-        help="Activation function to use",
+        "--activation", type=str, default="relu", help="Activation function to use",
     )
     parser.add_argument(
-        "--loss",
-        type=str,
-        default="cross_entropy",
-        help="Loss function to use",
+        "--loss", type=str, default="cross_entropy", help="Loss function to use",
     )
     parser.add_argument(
-        "--plot",
-        type=bool,
-        default=False,
-        help="Plot the training data",
+        "--plot", type=bool, default=False, help="Plot the training data",
     )
     parser.add_argument("--debug", action="store_true", default=False)
     args = parser.parse_args()
@@ -160,9 +127,7 @@ if __name__ == "__main__":
             "loss_{}".format(args.loss),
         ]
         model_str = "_".join(model_args)
-        args.model_dir = os.path.join(
-            f"models/{model_str}",
-        )
+        args.model_dir = os.path.join(f"models/{model_str}",)
         os.makedirs(args.model_dir, exist_ok=True)
 
         save_path = os.path.join(args.model_dir, "ckpt.bin")
@@ -214,30 +179,24 @@ if __name__ == "__main__":
             )
         )
 
-    if args.loss == "cross_entropy":
-        model.add_layer(
-            Dense(
-                input_dim=args.hidden_sizes[-1],
-                output_dim=10,
-                # activation="softmax",
-                activation="linear",  # we do softmax in the loss function
-                init_method=args.weight_init,
-            )
+    model.add_layer(
+        Dense(
+            input_dim=args.hidden_sizes[-1],
+            output_dim=10,
+            activation="linear",
+            init_method=args.weight_init,
         )
-    elif args.loss == "mse":
-        model.add_layer(
-            Dense(
-                input_dim=args.hidden_sizes[-1],
-                output_dim=10,
-                activation="linear",
-                init_method=args.weight_init,
-            )
-        )
+    )
 
     model.summary(args.batch_size)
 
     loss = args.loss
     optimizer = args.optimizer
+
+    if args.weight_decay_rate != 0:
+        regularizer = "L2"
+    else:
+        regularizer = None
 
     # compile the model
     model.compile(

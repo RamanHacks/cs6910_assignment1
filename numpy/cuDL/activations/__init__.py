@@ -41,7 +41,7 @@ class Linear(Activation):
         return x
 
     def backward(self):
-        return np.ones_like(self.output)
+        return np.ones_like(self.output).astype(np.float32)
 
     def __call__(self, x):
         return self.forward(x)
@@ -53,6 +53,7 @@ class Sigmoid(Activation):
 
     def forward(self, x):
         x = 1 / (1 + np.exp(-x))
+        self.output = x
         return x
 
     def backward(self):
@@ -107,11 +108,33 @@ class Softmax(Activation):
     def forward(self, x):
         # https://github.com/scipy/scipy/blob/b5d8bab88af61d61de09641243848df63380a67f/scipy/special/_logsumexp.py#L130
         # computing with log-sum-exp trick for numerical stability
-        return np.exp(x - logsumexp(x, axis=1, keepdims=True))
+        # x = np.exp(x - logsumexp(x, axis=1, keepdims=True))
+        # self.output = np.copy(x)
+        x -= np.max(x, axis=1, keepdims=True)
+        x = np.exp(x) / np.exp(x).sum(axis=1, keepdims=True)
+        self.output = x
+
+        return x
 
     def backward(self, grad):
         # https://sgugger.github.io/a-simple-neural-net-in-numpy.html#a-simple-neural-net-in-numpy
         return self.output * (grad - (grad * self.output).sum(axis=1)[:, None])
+
+    def __call__(self, x):
+        return self.forward(x)
+
+
+class Tanh(Activation):
+    def __init__(self):
+        self.name = "tanh"
+
+    def forward(self, x):
+        x = np.tanh(x)
+        self.output = x
+        return x
+
+    def backward(self):
+        return 1 - self.output**2
 
     def __call__(self, x):
         return self.forward(x)
@@ -126,7 +149,7 @@ class Relu(Activation):
         return np.maximum(x, 0)
 
     def backward(self):
-        return np.where(self.output > 0, 1, 0)
+        return np.where(self.output > 0, 1, 0).astype(np.float32)
 
     def __call__(self, x):
         return self.forward(x)
