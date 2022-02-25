@@ -62,10 +62,16 @@ if __name__ == "__main__":
         description="Train a model on the Fashion MNIST dataset"
     )
     parser.add_argument(
-        "--model_dir", type=str, default=None, help="Directory to store the models",
+        "--model_dir",
+        type=str,
+        default=None,
+        help="Directory to store the models",
     )
     parser.add_argument(
-        "--dataset", type=str, default="fmnist", help="fmnist",
+        "--dataset",
+        type=str,
+        default="fmnist",
+        help="fmnist",
     )
     parser.add_argument(
         "--model_name",
@@ -75,10 +81,16 @@ if __name__ == "__main__":
     )
     # training arguments
     parser.add_argument(
-        "--batch_size", type=int, default=64, help="Batch size for training",
+        "--batch_size",
+        type=int,
+        default=64,
+        help="Batch size for training",
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="Number of epochs to train for",
+        "--epochs",
+        type=int,
+        default=10,
+        help="Number of epochs to train for",
     )
     parser.add_argument(
         "--val_split",
@@ -87,16 +99,28 @@ if __name__ == "__main__":
         help="Validation split for training data",
     )
     parser.add_argument(
-        "--seed", type=int, default=42, help="Random seed for training",
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for training",
     )
     parser.add_argument(
-        "--shuffle", type=bool, default=True, help="Shuffle the training data",
+        "--shuffle",
+        type=bool,
+        default=True,
+        help="Shuffle the training data",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=1e-4, help="Learning rate for training",
+        "--learning_rate",
+        type=float,
+        default=1e-4,
+        help="Learning rate for training",
     )
     parser.add_argument(
-        "--num_layers", type=int, default=3, help="Number of layers in the model",
+        "--num_layers",
+        type=int,
+        default=3,
+        help="Number of layers in the model",
     )
     parser.add_argument(
         "--hidden_sizes",
@@ -111,7 +135,10 @@ if __name__ == "__main__":
         help="Weight decay rate (L2 regularizer) for training",
     )
     parser.add_argument(
-        "--optimizer", type=str, default="sgd", help="Optimizer to use for training",
+        "--optimizer",
+        type=str,
+        default="sgd",
+        help="Optimizer to use for training",
     )
     parser.add_argument(
         "--momentum",
@@ -120,7 +147,10 @@ if __name__ == "__main__":
         help="Momentum for SGD/rmsprop optimizer",
     )
     parser.add_argument(
-        "--nesterov", type=bool, default=False, help="Whether to use nesterov",
+        "--nesterov",
+        action="store_true",
+        default=False,
+        help="Whether to use nesterov",
     )
 
     parser.add_argument(
@@ -130,13 +160,22 @@ if __name__ == "__main__":
         help="Weight initialization scheme",
     )
     parser.add_argument(
-        "--activation", type=str, default="relu", help="Activation function to use",
+        "--activation",
+        type=str,
+        default="relu",
+        help="Activation function to use",
     )
     parser.add_argument(
-        "--loss", type=str, default="cross_entropy", help="Loss function to use",
+        "--loss",
+        type=str,
+        default="cross_entropy",
+        help="Loss function to use",
     )
     parser.add_argument(
-        "--plot", type=bool, default=False, help="Plot the training data",
+        "--plot",
+        type=bool,
+        default=False,
+        help="Plot the confusion matrix",
     )
     parser.add_argument("--debug", action="store_true", default=False)
 
@@ -149,21 +188,34 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.momentum > 0.0 and args.optimizer not in ["sgd", "rmsprop"]:
-        print("Momentum is only supported for SGD/RMSprop optimizer")
-        sys.exit(1)
+    # if args.momentum > 0.0 and args.optimizer not in ["sgd", "rmsprop"]:
+    #     print("Momentum is only supported for SGD/RMSprop optimizer")
+    #     sys.exit(1)
 
-    if args.nesterov and args.optimizer not in ["sgd", "nadam"]:
-        print("nesterov is only supported for SGD/nadam optimizer")
-        sys.exit(1)
+    # if args.nesterov and args.optimizer not in ["sgd", "nadam"]:
+    #     print("nesterov is only supported for SGD/nadam optimizer")
+    #     sys.exit(1)
 
-    if args.nesterov and args.optimizer == "adam":
-        print("You are trying to use adam with nestrov")
-        print("For simplicity, please use nadam as optimizer name")
-        sys.exit(1)
+    # if args.nesterov and args.optimizer == "adam":
+    #     print("You are trying to use adam with nestrov")
+    #     print("For simplicity, please use nadam as optimizer name")
+    #     sys.exit(1)
 
-    if args.optimizer == "nadam":
-        assert args.nesterov, "nadam requires nesterov"
+    # if args.optimizer == "nadam":
+    #     assert args.nesterov, "nadam requires nesterov"
+
+    # for sweep, lets make optimizers momentum, nestrov sgd separately
+    if args.optimizer == "momentum":
+        args.optimizer = "sgd"
+        args.momentum = 0.9
+
+    if args.optimizer == "rmsprop":
+        args.momentum = 0.9
+
+    if args.optimizer == "nesterov":
+        args.optimizer = "sgd"
+        args.momentum = 0.9
+        args.nesterov = True
 
     str_hidden_sizes = args.hidden_sizes
     args.hidden_sizes = [int(x) for x in args.hidden_sizes.split(",")]
@@ -183,7 +235,9 @@ if __name__ == "__main__":
             "loss_{}".format(args.loss),
         ]
         model_str = "_".join(model_args)
-        args.model_dir = os.path.join(f"models/{model_str}",)
+        args.model_dir = os.path.join(
+            f"models/{model_str}",
+        )
         os.makedirs(args.model_dir, exist_ok=True)
 
         save_path = os.path.join(args.model_dir, "ckpt.bin")
@@ -210,11 +264,11 @@ if __name__ == "__main__":
 
     if args.wandb_project is not None:
         elaborate_optimizer_name = args.optimizer
-        if args.optimizer == "sgd":
-            if args.nesterov:
-                elaborate_optimizer_name += "_nesterov"
-            elif args.momentum > 0.0:
-                elaborate_optimizer_name += "_{}".format(args.momentum)
+        # if args.optimizer == "sgd":
+        #     if args.nesterov:
+        #         elaborate_optimizer_name += "_nesterov"
+        #     elif args.momentum > 0.0:
+        #         elaborate_optimizer_name += "_{}".format(args.momentum)
 
         # descriptive name for the run
         args.wandb_suffix = "_".join(
@@ -329,4 +383,9 @@ if __name__ == "__main__":
     model = model.load(model.model_save_path)
 
     # Evaluate the model
-    model.predict(x_test, y_test, print_classification_metrics=True)
+    model.predict(
+        x_test,
+        y_test,
+        print_classification_metrics=True,
+        plot_confusion_matrix=args.plot,
+    )

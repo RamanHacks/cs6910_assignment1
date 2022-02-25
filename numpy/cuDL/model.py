@@ -134,7 +134,13 @@ class Model:
 
         return self
 
-    def predict(self, X_test, y_test=None, print_classification_metrics=False):
+    def predict(
+        self,
+        X_test,
+        y_test=None,
+        print_classification_metrics=False,
+        plot_confusion_matrix=False,
+    ):
         y_pred = self.forward(X_test)
         num_classes = y_pred.shape[1]
         if y_test is not None:
@@ -147,6 +153,37 @@ class Model:
                 y_pred = y_pred.argmax(axis=1)
                 print(metrics._classification_report(y_test, y_pred))
                 print(metrics._confusion_matrix(y_test, y_pred))
+
+            if plot_confusion_matrix:
+                class_names = [
+                    "T-shirt/top",
+                    "Trouser",
+                    "Pullover",
+                    "Dress",
+                    "Coat",
+                    "Sandal",
+                    "Shirt",
+                    "Sneaker",
+                    "Bag",
+                    "Ankle boot",
+                ]
+                wandb.log(
+                    {
+                        "conf_mat": wandb.plot.confusion_matrix(
+                            y_true=y_test, preds=y_pred, class_names=class_names
+                        )
+                    }
+                )
+                # plot some misclassified images to wandb
+                misclassified_images = []
+                for i in range(50):
+                    if y_pred[i] != y_test[i]:
+                        misclassified_images.append(X_test[i])
+
+                    if len(misclassified_images) == 10:
+                        break
+
+                wandb.log({"misclassified_images": wandb.Image(misclassified_images)})
 
     def fit(
         self,
