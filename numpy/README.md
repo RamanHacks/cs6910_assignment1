@@ -1,4 +1,4 @@
-# Training neural networks
+# Training neural networks in numpy
 
 ## Install Libraries
 ```
