@@ -217,24 +217,13 @@ def apply_op(image, op, severity):
     pil_img = op(pil_img, severity)
     return np.asarray(pil_img)
 
-def augment_and_mix(image, severity=3, width=3, depth=-1, alpha=.2, prob=1.):
-    """Perform AugMix augmentations and compute mixture.
-    Args:
-    image: Raw input image as float32 np.ndarray of shape (h, w, 1)
-    severity: Severity of underlying augmentation operators (between 1 to 10).
-    width: Width of augmentation chain
-    depth: Depth of augmentation chain. -1 enables stochastic depth uniformly
-      from [1, 3]
-    alpha: Probability coefficient for Beta and Dirichlet distributions.
-    Returns:
-    mixed: Augmented and mixed image.
-    """
+def augment_and_mix(image, severity=3, width=3, depth=-1, beta=.2, prob=1.):
     image = image[:, :, np.newaxis]
     image = np.repeat(image, 3, -1) 
     if np.random.rand(1) < prob:
         ws = np.float32(
-        np.random.dirichlet([alpha] * width))
-        m = np.float32(np.random.beta(alpha, alpha))
+        np.random.dirichlet([beta] * width))
+        m = np.float32(np.random.beta(beta, beta))
     else:
         return image
     
@@ -251,7 +240,7 @@ def augment_and_mix(image, severity=3, width=3, depth=-1, alpha=.2, prob=1.):
     mixed = (1 - m) * image + m * mix
     return mixed
 
-def augmix_batch(image_list, severity=3, width=3, depth=-1, alpha=.2, prob=1.):
+def augmix_batch(image_list, severity=3, width=3, depth=-1, beta=.2, prob=1.):
     from joblib import Parallel, delayed
-    batch_out = Parallel(n_jobs=12)(delayed(augment_and_mix)(i,severity,width,depth,alpha,prob) for i in image_list)
+    batch_out = Parallel(n_jobs=12)(delayed(augment_and_mix)(i,severity,width,depth,beta,prob) for i in image_list)
     return batch_out
