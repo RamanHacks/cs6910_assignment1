@@ -1,0 +1,27 @@
+program: train.py
+method: bayes
+metric:
+  name: val_acc
+  goal: maximize
+  
+parameters:
+  learning_rate:
+    values: [0.001, 0.01]
+  optimizer:
+    values: ["nadam", "adamw",]
+  batch_size:
+    values: [16, 64, 256, 1024]
+  hidden_sizes:
+    values: ["16", "64", "256", "1024"]
+  num_layers:
+    values: [3, 4, 5, 6]
+  weight_init:
+    values: ['xavier', 'he']
+  activation:
+    values: ['relu', 'tanh', 'silu']
+  cutmix_prob:
+    values: [0.1, 1]
+  augmix_prob:
+    values: [0.1, 0.5, 1]
+  mixup_prob:
+    values: [0.1, 1]
