@@ -13,12 +13,10 @@ from tqdm import tqdm
 from cuNN.optimizer import Momentum, SGD, AdaGrad, AdamW, RMSProp, Adam, Nadam
 from cuNN.module import SimpleLinear
 from cuNN.loss import CrossEntropy, MSE
-from cuNN.utils import save, load, cutmix_batch, smooth_batch, mixup_batch, augmix_batch
+from cuNN.utils import save, load, cutmix_batch, smooth_batch, mixup_batch, augmix_batch, cosine_decay_with_warmup
 
 
 def setup_data(val_split, seed):
-    classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', \
-    'Coat','Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
     (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
     
     # Convert the labels to categorical one-hot encoding
@@ -40,17 +38,17 @@ def main(args):
     assert len(args.hidden_sizes) == args.num_layers - 1
     
     model_args = "_".join(
-        [
-            "HS_{}".format(str_hidden_sizes),
-            "L_{}".format(args.num_layers),
+        [   "fmnist",
             "O_{}".format(args.optimizer),
-            "M_{}".format(args.momentum),
-            "LO_{}".format(args.loss),
             "A_{}".format(args.activation),
             "LR_{}".format(args.learning_rate),
+            "L_{}".format(args.num_layers),
+            "HS_{}".format(str_hidden_sizes),
             "BS_{}".format(args.batch_size),
             "WI_{}".format(args.weight_init),
             "DR_{}".format(args.weight_decay_rate),
+            "loss_{}".format(args.loss),
+            "M_{}".format(args.momentum),
             "MU_{}".format(args.mixup_prob),
             "CM_{}".format(args.cutmix_prob),
             "SM_{}".format(args.smoothing_val),
@@ -131,6 +129,7 @@ def main(args):
     ep_acc, ep_loss = None, None 
     epoch_log = tqdm(total=args.epochs, desc='Epoch', position=0, unit='epoch', leave=True)
     step_no =0
+    total_steps = (int(tot_samples/batch_size) + 1)*args.epochs
     best_val_acc = 0
     for epoch in range(args.epochs):
         if args.shuffle:
@@ -141,6 +140,7 @@ def main(args):
         if args.augmix_prob > 0:
             x_train = augmix_batch(x_train_og, prob=args.augmix_prob)
             
+        max_lr = 0
         sum_loss, sum_acc = 0, 0
         for start_idx in range(0, tot_samples, batch_size):
             step_no +=1
@@ -149,7 +149,10 @@ def main(args):
             else:
                 end_idx = start_idx + batch_size 
             len_t = end_idx - start_idx
-                
+            
+            # if len_t < batch_size/2:
+            #     continue
+            
             batch_index = index[start_idx:end_idx]
             x_batch = cp.asarray(np.array([x_train[i] for i in batch_index])) / 255.0
             y_batch = cp.asarray(np.array([y_train[i] for i in batch_index]))
@@ -165,13 +168,25 @@ def main(args):
             y = model(x_batch)
             loss = criterion(y, y_batch)
             model.backward(loss)
-            opt.apply()
+            
+            if args.use_lr_scheduler:
+                cosine_lr = cosine_decay_with_warmup(
+                    global_step = step_no,
+                    learning_rate_base = args.learning_rate,
+                    total_steps = total_steps,
+                    warmup_steps = 0.2 * total_steps,
+                    hold_base_rate_steps = 0.1 * total_steps,
+                )
+                
+                # max_lr = max(max_lr, float(cosine_lr))
+                opt.apply(lr=cp.asarray(cosine_lr))
+            else:
+                opt.apply()
             
             acc = cp.mean(y.argmax(axis=1) == y_batch.argmax(axis=1))
             sum_loss += loss['loss'] * len_t
             sum_acc += acc * len_t
         
-    
         epoch_log.update(1)
         ep_loss = sum_loss/tot_samples
         ep_acc = sum_acc/tot_samples
@@ -184,8 +199,8 @@ def main(args):
         
         epoch_log.set_postfix({'Train Loss': cp.round(ep_loss,3), 
                                 'Val Loss': cp.round(val_loss['loss'],3), 
-                                'Train Acc': cp.round(ep_acc,3), 
-                                'Val Acc': cp.round(val_acc,3)})  
+                                'Train Acc': cp.round(ep_acc*100,4), 
+                                'Val Acc': cp.round(val_acc*100,4)})
         if enable_wandb:    
             printing_dict = {
                     "epoch": epoch + 1,
@@ -200,8 +215,18 @@ def main(args):
     
     # testing accuracy
     y_test_pred = model.forward((x_test), True)
-    test_acc = cp.mean(y_test_pred.argmax(axis=1) == cp.array(y_test).argmax(axis=1))
+    top_pred_ids = y_test_pred.argmax(axis=1)
+    ground_truth_ids = cp.array(y_test).argmax(axis=1)
+    test_acc = cp.mean(top_pred_ids == ground_truth_ids)
+    
     print('Test Accuracy:', test_acc)
+    if enable_wandb:
+        wandb.log({"Test Accuracy": float(test_acc)})
+        classes = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', \
+        'Coat','Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+        wandb.log({"Confusion Matrix" : wandb.plot.confusion_matrix( 
+            preds=list(cp.asnumpy(top_pred_ids)), y_true=list(cp.asnumpy(ground_truth_ids)),
+            class_names=classes)})
     
     if args.model_dir is None:
         # set a descriptive model directory name
@@ -211,10 +236,6 @@ def main(args):
         save_path = os.path.join(args.model_dir, "ckpt.pkl")
         print("Saving models here: {}".format(save_path))
         save(model.parameters, save_path)
-    
-    if enable_wandb:
-        wandb.log({"Test Accuracy": float(test_acc)})
-    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -301,6 +322,12 @@ if __name__ == "__main__":
     
     parser.add_argument(
         "--augmix_prob", type=float, default=0., help="Augmix Prob"
+    )
+    parser.add_argument(
+        "--use_lr_scheduler",
+        action="store_true",
+        default=False,
+        help="Whether to use lr scheduler",
     )
     
     # add wandb arguments

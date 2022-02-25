@@ -5,7 +5,9 @@ class Optimizer:
         self.params = params
         self.lr = lr
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         pass
 
 
@@ -13,7 +15,9 @@ class SGD(Optimizer):
     def __init__(self, params, lr):
         super(SGD, self).__init__(params, lr)
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W"] -= self.lr * param["W_d"]
             param["b"] -= self.lr * param["b_d"]
@@ -26,7 +30,9 @@ class Momentum(Optimizer):
             layer.update({"W_g": cp.zeros_like(layer["W_d"])})
             layer.update({"b_g": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_g"] = self.lr * param["W_d"] + self.mu * param["W_g"]
             param["W"] -=  param["W_g"]
@@ -43,7 +49,9 @@ class RMSProp(Optimizer):
             layer.update({"W_s": cp.zeros_like(layer["W_d"])})
             layer.update({"b_s": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_s"] = self.beta * param["W_s"] + (1 - self.beta) * cp.square(param["W_d"])
             param["W"] -= self.lr * param["W_d"] / (cp.sqrt(param["W_s"]) + self.eps)
@@ -59,7 +67,9 @@ class AdaGrad(Optimizer):
             layer.update({"W_s": cp.zeros_like(layer["W_d"])})
             layer.update({"b_s": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_s"] = cp.square(param["W_d"])
             param["W"] -= self.lr * param["W_d"] / (cp.sqrt(param["W_s"]) + self.eps)
@@ -79,7 +89,9 @@ class Adam(Optimizer):
             layer.update({"b_m": cp.zeros_like(layer["b_d"])})
             layer.update({"b_v": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_m"] = (1 - self.beta1) * param["W_d"] + self.beta1 * param["W_m"]
             param["W_v"] = (1 - self.beta2) * cp.square(param["W_d"]) + self.beta2 * param["W_v"]
@@ -108,7 +120,9 @@ class Nadam(Optimizer):
             layer.update({"b_m": cp.zeros_like(layer["b_d"])})
             layer.update({"b_v": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_m"] = (1 - self.beta1) * param["W_d"] + self.beta1 * param["W_m"]
             param["W_v"] = (1 - self.beta2) * cp.square(param["W_d"]) + self.beta2 * param["W_v"]
@@ -140,7 +154,9 @@ class AdamW(Optimizer):
             layer.update({"b_m": cp.zeros_like(layer["b_d"])})
             layer.update({"b_v": cp.zeros_like(layer["b_d"])})
 
-    def apply(self):
+    def apply(self, lr=None):
+        if lr is not None:
+            self.lr = lr
         for param in self.params.values():
             param["W_m"] = (1 - self.beta1) * param["W_d"] + self.beta1 * param["W_m"]
             param["W_v"] = (1 - self.beta2) * cp.square(param["W_d"]) + self.beta2 * param["W_v"]
