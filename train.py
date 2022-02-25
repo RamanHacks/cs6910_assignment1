@@ -311,7 +311,7 @@ if __name__ == "__main__":
         "--loss", type=str, default="cross_entropy", help="Loss function to use",
     )
     parser.add_argument(
-        "--smoothing_val", type=float, default=0.1, help="Smoothing value"
+        "--smoothing_val", type=float, default=0, help="Smoothing value"
     )
     parser.add_argument(
         "--cutmix_prob", type=float, default=0, help="Cutmix Prob"
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use_lr_scheduler",
         action="store_true",
-        default=True,
+        default=False,
         help="Whether to use lr scheduler",
     )
     
